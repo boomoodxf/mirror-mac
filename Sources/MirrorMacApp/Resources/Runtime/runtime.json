@@ -1,0 +1,7 @@
+{
+  "upstream": "https://github.com/Genymobile/scrcpy",
+  "release": "v4.1",
+  "platform": "macOS arm64",
+  "files": ["adb", "scrcpy", "scrcpy-server"],
+  "note": "Runtime binaries are fetched by Scripts/fetch_runtime_arm64.sh and intentionally ignored by Git."
+}

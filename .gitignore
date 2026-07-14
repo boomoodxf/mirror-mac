@@ -1,0 +1,10 @@
+.DS_Store
+.build/
+.cache/
+dist/
+
+# The bundled runtime is fetched from the upstream scrcpy release when building.
+# Keep the directory and metadata in Git, but do not commit downloaded binaries.
+Sources/MirrorMacApp/Resources/Runtime/adb
+Sources/MirrorMacApp/Resources/Runtime/scrcpy
+Sources/MirrorMacApp/Resources/Runtime/scrcpy-server
