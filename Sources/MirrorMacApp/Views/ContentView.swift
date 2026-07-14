@@ -149,6 +149,10 @@ struct ContentView: View {
                     TextField("视频码率", text: $model.settings.videoBitRate)
                     Toggle("播放手机音频", isOn: $model.settings.audioEnabled)
                     Toggle("保持手机唤醒", isOn: $model.settings.stayAwake)
+                    Toggle("伪锁屏：关闭手机屏幕", isOn: $model.settings.turnScreenOff)
+                    Text("开启后手机端屏幕变黑，但仍可通过投屏窗口操作。设置会在下次启动镜像时生效。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 MirrorActionSection(
@@ -157,6 +161,8 @@ struct ContentView: View {
                     onStart: { model.startMirror(for: device) },
                     onStop: { model.stopMirror() }
                 )
+
+                PhoneFilesView(device: device)
             }
             .formStyle(.grouped)
             .padding()

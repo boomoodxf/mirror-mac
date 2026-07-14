@@ -6,4 +6,5 @@ struct MirrorSettings: Equatable {
     var videoBitRate = "8M"
     var audioEnabled = true
     var stayAwake = true
+    var turnScreenOff = false
 }

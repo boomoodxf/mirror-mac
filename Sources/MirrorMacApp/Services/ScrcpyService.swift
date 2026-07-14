@@ -35,6 +35,7 @@ final class ScrcpyService: ObservableObject {
 
         if settings.audioEnabled == false { arguments.append("--no-audio") }
         if settings.stayAwake { arguments.append("--stay-awake") }
+        if settings.turnScreenOff { arguments.append("--turn-screen-off") }
 
         let process = Process()
         process.executableURL = executableURL
