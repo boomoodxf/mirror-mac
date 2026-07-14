@@ -4,7 +4,8 @@ import Combine
 @MainActor
 final class DeviceListViewModel: ObservableObject {
     @Published private(set) var devices: [AndroidDevice] = []
-    @Published var selectedDeviceID: AndroidDevice.ID?
+    @Published private(set) var selectedDeviceID: AndroidDevice.ID?
+    @Published private(set) var selectedDevice: AndroidDevice?
     @Published var settings = MirrorSettings()
     @Published var wirelessAddress = ""
     @Published private(set) var isRefreshing = false
@@ -13,11 +14,6 @@ final class DeviceListViewModel: ObservableObject {
     let scrcpy = ScrcpyService()
     private let adb = ADBService()
     private var refreshTask: Task<Void, Never>?
-
-    var selectedDevice: AndroidDevice? {
-        guard let selectedDeviceID else { return nil }
-        return devices.first { $0.id == selectedDeviceID }
-    }
 
     var connectedDevices: [AndroidDevice] {
         devices.filter { $0.state == .device }
@@ -37,6 +33,7 @@ final class DeviceListViewModel: ObservableObject {
 
     func select(_ device: AndroidDevice) {
         selectedDeviceID = device.id
+        selectedDevice = device
     }
 
     func refresh() {
@@ -52,10 +49,11 @@ final class DeviceListViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
             self.devices = devices
             if let selectedDeviceID = self.selectedDeviceID,
-               devices.contains(where: { $0.id == selectedDeviceID }) {
-                self.selectedDeviceID = selectedDeviceID
+               let selectedDevice = devices.first(where: { $0.id == selectedDeviceID }) {
+                self.selectedDevice = selectedDevice
             } else {
                 self.selectedDeviceID = devices.first?.id
+                self.selectedDevice = devices.first
             }
             self.isRefreshing = false
         }

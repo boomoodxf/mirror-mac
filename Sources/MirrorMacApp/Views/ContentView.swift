@@ -52,17 +52,45 @@ struct ContentView: View {
                     message: "请连接 Android 手机并开启 USB 调试"
                 )
             } else {
-                List(selection: $model.selectedDeviceID) {
-                    ForEach(model.devices) { device in
-                        DeviceRow(device: device, scrcpy: model.scrcpy)
-                            .tag(device.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
+                // Use explicit buttons instead of List(selection:). On macOS, the
+                // sidebar selection binding can be swallowed by custom row content;
+                // an explicit button makes every row reliably selectable.
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(model.devices) { device in
+                            Button {
                                 model.select(device)
+                            } label: {
+                                DeviceRow(
+                                    device: device,
+                                    scrcpy: model.scrcpy,
+                                    isSelected: model.selectedDeviceID == device.id
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .fill(model.selectedDeviceID == device.id ? Color.accentColor.opacity(0.18) : .clear)
+                                }
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
+                            // Keep a direct tap handler as a fallback for macOS versions
+                            // where a plain button inside a split-view sidebar can lose
+                            // its action when the label contains custom layout.
+                            .simultaneousGesture(
+                                TapGesture().onEnded {
+                                    model.select(device)
+                                }
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel("选择设备 \(device.displayName)")
+                        }
                     }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 8)
                 }
-                .listStyle(.sidebar)
             }
 
             Divider()
@@ -132,6 +160,7 @@ struct ContentView: View {
             }
             .formStyle(.grouped)
             .padding()
+            .id(device.id)
         } else {
             EmptyStateView(
                 title: "选择设备",
@@ -174,6 +203,7 @@ private struct EmptyStateView: View {
 private struct DeviceRow: View {
     let device: AndroidDevice
     @ObservedObject var scrcpy: ScrcpyService
+    let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -181,6 +211,7 @@ private struct DeviceRow: View {
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.displayName)
+                    .fontWeight(isSelected ? .semibold : .regular)
                     .lineLimit(1)
                 Text(device.connectionLabel)
                     .font(.caption)
