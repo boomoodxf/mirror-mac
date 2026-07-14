@@ -3,17 +3,25 @@ import Combine
 
 @MainActor
 final class ScrcpyService: ObservableObject {
-    @Published private(set) var isRunning = false
-    @Published private(set) var lastError: String?
+    @Published private(set) var runningSerials: Set<String> = []
+    @Published private(set) var lastErrors: [String: String] = [:]
 
-    private var process: Process?
+    private var processes: [String: Process] = [:]
+
+    func isRunning(for serial: String) -> Bool {
+        runningSerials.contains(serial)
+    }
+
+    func lastError(for serial: String) -> String? {
+        lastErrors[serial]
+    }
 
     func start(device: AndroidDevice, settings: MirrorSettings) {
-        stop()
-        lastError = nil
+        stop(deviceID: device.serial)
+        lastErrors[device.serial] = nil
 
         guard let executableURL = scrcpyURL else {
-            lastError = "未找到 scrcpy。请将 scrcpy 和 adb 放入应用的 Runtime 目录。"
+            lastErrors[device.serial] = "未找到 scrcpy。请将 scrcpy 和 adb 放入应用的 Runtime 目录。"
             return
         }
 
@@ -31,42 +39,52 @@ final class ScrcpyService: ObservableObject {
         let process = Process()
         process.executableURL = executableURL
         process.arguments = arguments
-        process.environment = (ProcessInfo.processInfo.environment).merging([
+        process.environment = ProcessInfo.processInfo.environment.merging([
             "ADB": adbURL?.path ?? "adb"
         ]) { _, new in new }
 
         let errorPipe = Pipe()
         process.standardError = errorPipe
         process.standardOutput = errorPipe
+        let serial = device.serial
         process.terminationHandler = { [weak self] finishedProcess in
             let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(decoding: data, as: UTF8.self)
             Task { @MainActor in
+                guard let self, self.processes[serial] === finishedProcess else { return }
+
+                self.processes.removeValue(forKey: serial)
+                self.runningSerials.remove(serial)
+
                 if finishedProcess.terminationStatus != 0 {
-                    self?.lastError = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if self?.lastError?.isEmpty != false {
-                        self?.lastError = "scrcpy 已退出，退出码：\(finishedProcess.terminationStatus)"
-                    }
+                    let error = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    self.lastErrors[serial] = error.isEmpty
+                        ? "scrcpy 已退出，退出码：\(finishedProcess.terminationStatus)"
+                        : error
                 }
-                self?.isRunning = false
-                self?.process = nil
             }
         }
 
         do {
             try process.run()
-            self.process = process
-            isRunning = true
+            processes[device.serial] = process
+            runningSerials.insert(device.serial)
         } catch {
-            lastError = "启动 scrcpy 失败：\(error.localizedDescription)"
+            lastErrors[device.serial] = "启动 scrcpy 失败：\(error.localizedDescription)"
         }
     }
 
-    func stop() {
-        guard let process else { return }
-        process.terminate()
-        self.process = nil
-        isRunning = false
+    func stop(deviceID: String) {
+        if let process = processes.removeValue(forKey: deviceID) {
+            process.terminationHandler = nil
+            process.terminate()
+        }
+        runningSerials.remove(deviceID)
+    }
+
+    func stopAll() {
+        let serials = Array(processes.keys)
+        serials.forEach(stop(deviceID:))
     }
 
     private var scrcpyURL: URL? {

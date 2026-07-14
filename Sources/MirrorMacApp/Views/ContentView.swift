@@ -23,6 +23,18 @@ struct ContentView: View {
                 Text("设备")
                     .font(.headline)
                 Spacer()
+                Button { model.startAllMirrors() } label: {
+                    Image(systemName: "play.rectangle")
+                }
+                .buttonStyle(.borderless)
+                .disabled(model.connectedDevices.isEmpty)
+                .help("同时启动所有已连接设备的镜像")
+                Button { model.stopAllMirrors() } label: {
+                    Image(systemName: "stop.circle")
+                }
+                .buttonStyle(.borderless)
+                .disabled(!model.hasRunningMirrors)
+                .help("停止所有镜像")
                 Button { model.refresh() } label: {
                     Image(systemName: "arrow.clockwise")
                 }
@@ -40,9 +52,15 @@ struct ContentView: View {
                     message: "请连接 Android 手机并开启 USB 调试"
                 )
             } else {
-                List(model.devices, selection: $model.selectedDevice) { device in
-                    DeviceRow(device: device)
-                        .tag(device as AndroidDevice?)
+                List(selection: $model.selectedDeviceID) {
+                    ForEach(model.devices) { device in
+                        DeviceRow(device: device, scrcpy: model.scrcpy)
+                            .tag(device.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                model.select(device)
+                            }
+                    }
                 }
                 .listStyle(.sidebar)
             }
@@ -105,24 +123,12 @@ struct ContentView: View {
                     Toggle("保持手机唤醒", isOn: $model.settings.stayAwake)
                 }
 
-                Section {
-                    HStack {
-                        if model.scrcpy.isRunning {
-                            Button("停止镜像", role: .destructive) { model.stopMirror() }
-                        } else {
-                            Button("开始镜像") { model.startMirror() }
-                                .keyboardShortcut(.defaultAction)
-                                .disabled(device.state != .device)
-                        }
-                        Spacer()
-                        if let error = model.scrcpy.lastError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .multilineTextAlignment(.trailing)
-                        }
-                    }
-                }
+                MirrorActionSection(
+                    device: device,
+                    scrcpy: model.scrcpy,
+                    onStart: { model.startMirror(for: device) },
+                    onStop: { model.stopMirror() }
+                )
             }
             .formStyle(.grouped)
             .padding()
@@ -167,6 +173,7 @@ private struct EmptyStateView: View {
 
 private struct DeviceRow: View {
     let device: AndroidDevice
+    @ObservedObject var scrcpy: ScrcpyService
 
     var body: some View {
         HStack(spacing: 10) {
@@ -180,10 +187,44 @@ private struct DeviceRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Circle()
-                .fill(device.state == .device ? .green : .orange)
-                .frame(width: 7, height: 7)
+            if scrcpy.isRunning(for: device.id) {
+                Image(systemName: "play.circle.fill")
+                    .foregroundStyle(.green)
+                    .help("正在镜像")
+            } else {
+                Circle()
+                    .fill(device.state == .device ? .green : .orange)
+                    .frame(width: 7, height: 7)
+            }
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct MirrorActionSection: View {
+    let device: AndroidDevice
+    @ObservedObject var scrcpy: ScrcpyService
+    let onStart: () -> Void
+    let onStop: () -> Void
+
+    var body: some View {
+        Section {
+            HStack {
+                if scrcpy.isRunning(for: device.id) {
+                    Button("停止镜像", role: .destructive, action: onStop)
+                } else {
+                    Button("开始镜像", action: onStart)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(device.state != .device)
+                }
+                Spacer()
+                if let error = scrcpy.lastError(for: device.id) {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
     }
 }

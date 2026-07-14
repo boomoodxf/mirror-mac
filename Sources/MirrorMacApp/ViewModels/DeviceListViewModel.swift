@@ -4,7 +4,7 @@ import Combine
 @MainActor
 final class DeviceListViewModel: ObservableObject {
     @Published private(set) var devices: [AndroidDevice] = []
-    @Published var selectedDevice: AndroidDevice?
+    @Published var selectedDeviceID: AndroidDevice.ID?
     @Published var settings = MirrorSettings()
     @Published var wirelessAddress = ""
     @Published private(set) var isRefreshing = false
@@ -14,12 +14,29 @@ final class DeviceListViewModel: ObservableObject {
     private let adb = ADBService()
     private var refreshTask: Task<Void, Never>?
 
+    var selectedDevice: AndroidDevice? {
+        guard let selectedDeviceID else { return nil }
+        return devices.first { $0.id == selectedDeviceID }
+    }
+
+    var connectedDevices: [AndroidDevice] {
+        devices.filter { $0.state == .device }
+    }
+
+    var hasRunningMirrors: Bool {
+        !scrcpy.runningSerials.isEmpty
+    }
+
     init() {
         refresh()
     }
 
     deinit {
         refreshTask?.cancel()
+    }
+
+    func select(_ device: AndroidDevice) {
+        selectedDeviceID = device.id
     }
 
     func refresh() {
@@ -34,10 +51,11 @@ final class DeviceListViewModel: ObservableObject {
 
             guard !Task.isCancelled else { return }
             self.devices = devices
-            if let selectedDevice, devices.contains(selectedDevice) == false {
-                self.selectedDevice = devices.first
-            } else if self.selectedDevice == nil {
-                self.selectedDevice = devices.first
+            if let selectedDeviceID = self.selectedDeviceID,
+               devices.contains(where: { $0.id == selectedDeviceID }) {
+                self.selectedDeviceID = selectedDeviceID
+            } else {
+                self.selectedDeviceID = devices.first?.id
             }
             self.isRefreshing = false
         }
@@ -48,15 +66,33 @@ final class DeviceListViewModel: ObservableObject {
             message = "请先选择一台设备。"
             return
         }
-        guard selectedDevice.state == .device else {
-            message = "设备当前状态为“\(selectedDevice.state.label)”。"
+        startMirror(for: selectedDevice)
+    }
+
+    func startMirror(for device: AndroidDevice) {
+        guard device.state == .device else {
+            message = "设备“\(device.displayName)”当前状态为“\(device.state.label)”。"
             return
         }
-        scrcpy.start(device: selectedDevice, settings: settings)
+        scrcpy.start(device: device, settings: settings)
+    }
+
+    func startAllMirrors() {
+        let devices = connectedDevices
+        guard !devices.isEmpty else {
+            message = "当前没有可启动镜像的已连接设备。"
+            return
+        }
+        devices.forEach { scrcpy.start(device: $0, settings: settings) }
     }
 
     func stopMirror() {
-        scrcpy.stop()
+        guard let selectedDevice else { return }
+        scrcpy.stop(deviceID: selectedDevice.id)
+    }
+
+    func stopAllMirrors() {
+        scrcpy.stopAll()
     }
 
     func connectWireless() {
